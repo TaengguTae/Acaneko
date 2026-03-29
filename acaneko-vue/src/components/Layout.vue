@@ -33,7 +33,11 @@ checkMobile()
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+  background-image: url('/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .sidebar {
@@ -57,12 +61,13 @@ checkMobile()
 .content-wrapper {
   width: 100%;
   height: 100%;
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 255, 255, 0.7);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   overflow: auto;
   padding: 32px;
   box-sizing: border-box;
+  backdrop-filter: blur(1px);
 }
 
 .content-wrapper::-webkit-scrollbar {
