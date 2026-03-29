@@ -4,7 +4,7 @@
 """
 
 from typing import List
-from backend.models import VectorModel, Language
+from models import VectorModel, Language
 
 
 class ConfigManager:

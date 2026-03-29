@@ -6,7 +6,7 @@
 import asyncio
 import aiohttp
 from typing import Dict, Optional
-from backend.data_manager import DataManager
+from .data_manager import DataManager
 
 
 class ParseService:

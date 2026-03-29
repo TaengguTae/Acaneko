@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional, Dict
 from datetime import datetime
-from backend.models import KnowledgeBase, DocumentInfo
+from models import KnowledgeBase, DocumentInfo
 
 
 class DataManager:
