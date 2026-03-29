@@ -23,6 +23,14 @@ from .chat import (
     ChatResponse
 )
 
+from .model_test import (
+    ModelInfo,
+    ModelTestRequest,
+    DocScore,
+    ModelTestResult,
+    ModelTestResponse
+)
+
 __all__ = [
     'VectorModel',
     'Language',
@@ -37,5 +45,10 @@ __all__ = [
     'ChatRequest',
     'QueryUnderstandingResult',
     'RetrievalResult',
-    'ChatResponse'
+    'ChatResponse',
+    'ModelInfo',
+    'ModelTestRequest',
+    'DocScore',
+    'ModelTestResult',
+    'ModelTestResponse'
 ]

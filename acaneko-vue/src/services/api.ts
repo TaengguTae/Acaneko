@@ -98,6 +98,39 @@ export interface ChatResponse {
   retrievalResults: RetrievalResult[]
 }
 
+export interface ModelInfo {
+  id: number
+  name: string
+  provider: string
+  version: string
+  type: 'embedding' | 'rerank'
+  description: string
+}
+
+export interface DocScore {
+  docId: number
+  docContent: string
+  score: number
+}
+
+export interface ModelTestResult {
+  modelId: number
+  modelName: string
+  docScores: DocScore[]
+}
+
+export interface ModelTestResponse {
+  results: ModelTestResult[]
+  totalModels: number
+  totalDocuments: number
+}
+
+export interface ModelTestRequest {
+  query: string
+  documents: string[]
+  modelIds: number[]
+}
+
 class ApiService {
   private baseUrl: string
 
@@ -290,6 +323,17 @@ class ApiService {
     return this.request<{ response: string }>('/query/generate', {
       method: 'POST',
       body: JSON.stringify(this.toSnakeCase({ query, context, config })),
+    })
+  }
+
+  async getModels(modelType: 'embedding' | 'rerank'): Promise<ModelInfo[]> {
+    return this.request<ModelInfo[]>(`/model-test/models/${modelType}`)
+  }
+
+  async testModels(request: ModelTestRequest): Promise<ModelTestResponse> {
+    return this.request<ModelTestResponse>('/model-test/test', {
+      method: 'POST',
+      body: JSON.stringify(this.toSnakeCase(request)),
     })
   }
 }

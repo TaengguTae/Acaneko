@@ -6,5 +6,6 @@
 from .knowledge_base import init_router as init_kb_router
 from .chat import init_router as init_chat_router
 from .config import init_router as init_config_router
+from .model_test import init_router as init_model_test_router
 
-__all__ = ['init_kb_router', 'init_chat_router', 'init_config_router']
+__all__ = ['init_kb_router', 'init_chat_router', 'init_config_router', 'init_model_test_router']

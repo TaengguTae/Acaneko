@@ -1,93 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-
-interface Model {
-  id: number
-  name: string
-  provider: string
-  version: string
-  type: 'embedding' | 'rerank'
-  description: string
-}
+import { ref, computed, onMounted, watch } from 'vue'
+import { apiService, type ModelInfo, type ModelTestRequest, type ModelTestResponse } from '../services/api'
 
 interface DocInput {
   id: number
   content: string
 }
 
-interface ModelResult {
-  modelId: number
-  modelName: string
-  docScores: Array<{
-    docId: number
-    docContent: string
-    score: number
-  }>
-}
-
 const activeTab = ref<'embedding' | 'rerank'>('embedding')
 
-const embeddingModels = ref<Model[]>([
-  {
-    id: 1,
-    name: 'OpenAI Embedding-3',
-    provider: 'OpenAI',
-    version: 'text-embedding-3-small',
-    type: 'embedding',
-    description: '最新的OpenAI嵌入模型，支持多语言'
-  },
-  {
-    id: 2,
-    name: 'BGE-Large',
-    provider: 'BAAI',
-    version: 'bge-large-zh-v1.5',
-    type: 'embedding',
-    description: '强大的中文嵌入模型，适合中文场景'
-  },
-  {
-    id: 3,
-    name: 'Cohere Embed',
-    provider: 'Cohere',
-    version: 'embed-multilingual-v3.0',
-    type: 'embedding',
-    description: '多语言嵌入模型，支持100+语言'
-  },
-  {
-    id: 4,
-    name: 'E5-Large',
-    provider: 'Intfloat',
-    version: 'e5-large-v2',
-    type: 'embedding',
-    description: '高性能嵌入模型，支持长文本'
-  }
-])
-
-const rerankModels = ref<Model[]>([
-  {
-    id: 5,
-    name: 'BGE Reranker',
-    provider: 'BAAI',
-    version: 'bge-reranker-v2-m3',
-    type: 'rerank',
-    description: '高效的中文重排序模型'
-  },
-  {
-    id: 6,
-    name: 'Cohere Rerank',
-    provider: 'Cohere',
-    version: 'rerank-v3.5',
-    type: 'rerank',
-    description: '多语言重排序模型，性能优异'
-  },
-  {
-    id: 7,
-    name: 'Cross Encoder',
-    provider: 'Microsoft',
-    version: 'cross-encoder-ms-marco',
-    type: 'rerank',
-    description: '经典的重排序模型，稳定可靠'
-  }
-])
+const embeddingModels = ref<ModelInfo[]>([])
+const rerankModels = ref<ModelInfo[]>([])
 
 const queryInput = ref('')
 const docInputs = ref<DocInput[]>([
@@ -95,7 +18,15 @@ const docInputs = ref<DocInput[]>([
 ])
 const selectedModelIds = ref<number[]>([])
 const isRunning = ref(false)
-const testResults = ref<ModelResult[]>([])
+const testResults = ref<Array<{
+  modelId: number
+  modelName: string
+  docScores: Array<{
+    docId: number
+    docContent: string
+    score: number
+  }>
+}>>([])
 const docIdCounter = ref(2)
 
 const currentModels = computed(() => {
@@ -107,6 +38,28 @@ const canRunTest = computed(() => {
          docInputs.value.some(doc => doc.content.trim() !== '') &&
          selectedModelIds.value.length >= 1 &&
          selectedModelIds.value.length <= 3
+})
+
+const loadModels = async () => {
+  try {
+    const models = await apiService.getModels(activeTab.value)
+    if (activeTab.value === 'embedding') {
+      embeddingModels.value = models
+    } else {
+      rerankModels.value = models
+    }
+  } catch (error) {
+    console.error('Failed to load models:', error)
+  }
+}
+
+onMounted(() => {
+  loadModels()
+})
+
+watch(activeTab, () => {
+  selectedModelIds.value = []
+  loadModels()
 })
 
 const addDocInput = () => {
@@ -139,29 +92,31 @@ const runTest = async () => {
   isRunning.value = true
   testResults.value = []
 
-  await new Promise(resolve => setTimeout(resolve, 2000))
-
-  selectedModelIds.value.forEach(modelId => {
-    const model = currentModels.value.find(m => m.id === modelId)
-    if (model) {
-      const docScores = docInputs.value
+  try {
+    const request: ModelTestRequest = {
+      query: queryInput.value,
+      documents: docInputs.value
         .filter(doc => doc.content.trim() !== '')
-        .map(doc => ({
-          docId: doc.id,
-          docContent: doc.content,
-          score: Math.random() * 0.5 + 0.5
-        }))
-        .sort((a, b) => b.score - a.score)
-
-      testResults.value.push({
-        modelId: modelId,
-        modelName: model.name,
-        docScores
-      })
+        .map(doc => doc.content),
+      modelIds: selectedModelIds.value
     }
-  })
 
-  isRunning.value = false
+    const response: ModelTestResponse = await apiService.testModels(request)
+
+    testResults.value = response.results.map(result => ({
+      modelId: result.modelId,
+      modelName: result.modelName,
+      docScores: result.docScores.map(score => ({
+        docId: score.docId,
+        docContent: score.docContent,
+        score: score.score
+      }))
+    }))
+  } catch (error) {
+    console.error('Failed to run test:', error)
+  } finally {
+    isRunning.value = false
+  }
 }
 
 const getScoreColor = (score: number) => {

@@ -12,8 +12,8 @@ import logging
 
 sys.path.insert(0, str(__file__).replace('\\', '/').rsplit('/', 1)[0])
 
-from service import DataManager, ParseService, ChatService
-from routers import init_kb_router, init_chat_router, init_config_router
+from service import DataManager, ParseService, ChatService, ModelTestService
+from routers import init_kb_router, init_chat_router, init_config_router, init_model_test_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,11 +42,12 @@ def init_services():
     data_manager = DataManager()
     parse_service = ParseService(data_manager)
     chat_service = ChatService(data_manager)
+    model_test_service = ModelTestService()
     
-    return data_manager, parse_service, chat_service
+    return data_manager, parse_service, chat_service, model_test_service
 
 
-data_manager, parse_service, chat_service = init_services()
+data_manager, parse_service, chat_service, model_test_service = init_services()
 
 
 def register_routers():
@@ -54,10 +55,12 @@ def register_routers():
     kb_router = init_kb_router(data_manager, parse_service)
     chat_router = init_chat_router(chat_service)
     config_router = init_config_router()
+    model_test_router = init_model_test_router(model_test_service)
     
     app.include_router(kb_router)
     app.include_router(chat_router)
     app.include_router(config_router)
+    app.include_router(model_test_router)
     
     logger.info("All routers registered successfully")
 
