@@ -55,6 +55,49 @@ export interface ParseStatusResponse {
   percentage: number
 }
 
+export interface ChatConfig {
+  knowledgeBaseId: string
+  llmModel: string
+  similarityThreshold: number
+  advancedQueryEnabled: boolean
+  queryUnderstandingOptions: {
+    keywordExtraction: boolean
+    slotExtraction: boolean
+    queryRewriting: boolean
+    hyde: boolean
+  }
+  rerankEnabled: boolean
+  rerankModel: string
+  rerankThreshold: number
+}
+
+export interface ChatRequest {
+  query: string
+  config: ChatConfig
+}
+
+export interface QueryUnderstandingResult {
+  keywords: string[]
+  slots: string[]
+  rewrittenQuery: string
+  hyde: string
+}
+
+export interface RetrievalResult {
+  id: string
+  content: string
+  similarity: number
+  rankScore: number
+  fileName: string
+  metadata: Record<string, any>
+}
+
+export interface ChatResponse {
+  message: string
+  queryUnderstanding?: QueryUnderstandingResult
+  retrievalResults: RetrievalResult[]
+}
+
 class ApiService {
   private baseUrl: string
 
@@ -220,6 +263,34 @@ class ApiService {
     return this.request<ParseStatusResponse>(
       `/knowledge-bases/${knowledgeBaseId}/parse-status`
     )
+  }
+
+  async chat(request: ChatRequest): Promise<ChatResponse> {
+    return this.request<ChatResponse>('/chat', {
+      method: 'POST',
+      body: JSON.stringify(this.toSnakeCase(request)),
+    })
+  }
+
+  async understandQuery(query: string, config: any): Promise<QueryUnderstandingResult> {
+    return this.request<QueryUnderstandingResult>('/query/understand', {
+      method: 'POST',
+      body: JSON.stringify(this.toSnakeCase({ query, config })),
+    })
+  }
+
+  async retrieveDocuments(query: string, knowledgeBaseId: string, config: any): Promise<RetrievalResult[]> {
+    return this.request<RetrievalResult[]>(`/query/retrieve?query=${encodeURIComponent(query)}&kb_id=${knowledgeBaseId}`, {
+      method: 'POST',
+      body: JSON.stringify(this.toSnakeCase({ config })),
+    })
+  }
+
+  async generateResponse(query: string, context: string, config: any): Promise<{ response: string }> {
+    return this.request<{ response: string }>('/query/generate', {
+      method: 'POST',
+      body: JSON.stringify(this.toSnakeCase({ query, context, config })),
+    })
   }
 }
 

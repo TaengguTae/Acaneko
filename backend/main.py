@@ -1,6 +1,6 @@
 """
 FastAPI主应用
-提供知识库管理的所有API端点
+提供知识库管理、聊天交互等API端点
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -9,22 +9,31 @@ from fastapi.responses import JSONResponse
 from typing import List
 import uvicorn
 import sys
+import logging
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.models import (
     KnowledgeBase, CreateKnowledgeBaseRequest, UpdateKnowledgeBaseRequest,
-    ParseDocumentsRequest, ParseStatusResponse, DocumentInfo, BatchDeleteDocumentsRequest
+    ParseDocumentsRequest, ParseStatusResponse, DocumentInfo, BatchDeleteDocumentsRequest,
+    ChatConfig, ChatRequest, QueryUnderstandingResult, RetrievalResult, ChatResponse
 )
 from backend.data_manager import DataManager
 from backend.config import ConfigManager
 from backend.parse_service import ParseService
+from backend.chat_service import ChatService
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
-    title="RAG知识库管理API",
-    description="提供知识库创建、文件管理、文档解析等功能",
+    title="RAG知识库与聊天API",
+    description="提供知识库管理、文档解析、聊天对话等功能",
     version="1.0.0"
 )
 
@@ -39,6 +48,7 @@ app.add_middleware(
 data_manager = DataManager()
 config_manager = ConfigManager()
 parse_service = ParseService(data_manager)
+chat_service = ChatService(data_manager)
 
 
 @app.get("/")
@@ -212,6 +222,83 @@ async def get_parse_status(kb_id: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    聊天主接口
+    接收用户查询和配置参数，返回AI回复、Query理解结果和检索召回结果
+    """
+    try:
+        logger.info(f"Received chat request: {request.query}")
+        
+        request_dict = {
+            "query": request.query,
+            "config": request.config.dict()
+        }
+        
+        result = chat_service.process_chat_request(request_dict)
+        
+        return ChatResponse(**result)
+    except ValueError as e:
+        logger.error(f"Validation error in chat request: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error processing chat request: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/query/understand", response_model=QueryUnderstandingResult)
+async def understand_query(query: str, config: dict):
+    """
+    Query理解接口
+    对用户查询进行意图解析和预处理
+    """
+    try:
+        logger.info(f"Processing query understanding: {query}")
+        
+        result = chat_service.understand_query(query, config)
+        
+        return QueryUnderstandingResult(**result)
+    except Exception as e:
+        logger.error(f"Query understanding failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/query/retrieve", response_model=List[RetrievalResult])
+async def retrieve_documents(query: str, kb_id: str, config: dict):
+    """
+    检索召回接口
+    基于query从知识库中检索相关文档
+    """
+    try:
+        logger.info(f"Retrieving documents for query: {query}, KB: {kb_id}")
+        
+        config["knowledge_base_id"] = kb_id
+        results = chat_service.retrieve_documents(query, kb_id, config)
+        
+        return [RetrievalResult(**result) for result in results]
+    except Exception as e:
+        logger.error(f"Document retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/query/generate", response_model=dict)
+async def generate_response(query: str, context: str, config: dict):
+    """
+    大模型回答接口
+    基于查询和检索上下文生成最终回答
+    """
+    try:
+        logger.info(f"Generating response for query: {query}")
+        
+        response = chat_service.generate_response(query, context, config)
+        
+        return {"response": response}
+    except Exception as e:
+        logger.error(f"Response generation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

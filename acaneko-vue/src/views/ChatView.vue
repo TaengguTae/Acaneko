@@ -1,28 +1,12 @@
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted } from 'vue'
-import { apiService, type KnowledgeBase } from '../services/api'
+import { apiService, type KnowledgeBase, type ChatConfig, type QueryUnderstandingResult, type RetrievalResult } from '../services/api'
 
 interface Message {
   id: number
   type: 'user' | 'assistant'
   content: string
   timestamp: string
-}
-
-interface RetrievalResult {
-  id: string
-  content: string
-  similarity: number
-  rankScore: number
-  fileName: string
-  metadata: Record<string, any>
-}
-
-interface QueryUnderstanding {
-  keywords: string[]
-  slots: string[]
-  rewrittenQuery: string
-  hyde: string
 }
 
 const messages = ref<Message[]>([
@@ -92,6 +76,11 @@ const scrollToBottom = () => {
 const handleSend = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
 
+  if (!selectedKnowledgeBase.value) {
+    alert('请先选择知识库')
+    return
+  }
+
   const userMessage: Message = {
     id: Date.now(),
     type: 'user',
@@ -106,44 +95,63 @@ const handleSend = async () => {
 
   isLoading.value = true
 
-  setTimeout(() => {
+  try {
+    const chatConfig: ChatConfig = {
+      knowledgeBaseId: selectedKnowledgeBase.value,
+      llmModel: selectedLLM.value,
+      similarityThreshold: similarityThreshold.value,
+      advancedQueryEnabled: advancedQueryEnabled.value,
+      queryUnderstandingOptions: {
+        keywordExtraction: queryUnderstandingOptions.value.keywordExtraction,
+        slotExtraction: queryUnderstandingOptions.value.slotExtraction,
+        queryRewriting: queryUnderstandingOptions.value.queryRewriting,
+        hyde: queryUnderstandingOptions.value.hyde
+      },
+      rerankEnabled: rerankEnabled.value,
+      rerankModel: rerankModel.value,
+      rerankThreshold: rerankThreshold.value
+    }
+
+    const response = await apiService.chat({
+      query: userQuery,
+      config: chatConfig
+    })
+
     const assistantMessage: Message = {
       id: Date.now(),
       type: 'assistant',
-      content: `这是一个模拟的AI回复。您的问题是："${userQuery}"。在实际应用中，这里会调用后端API进行RAG检索和生成回答。`,
+      content: response.message,
       timestamp: new Date().toLocaleTimeString()
     }
     messages.value.push(assistantMessage)
     
-    queryUnderstandingResult.value = {
-      keywords: ['关键词1', '关键词2'],
-      slots: ['槽位1', '槽位2'],
-      rewrittenQuery: '重写后的查询',
-      hyde: '假设性文档嵌入'
+    if (response.queryUnderstanding) {
+      queryUnderstandingResult.value = {
+        keywords: response.queryUnderstanding.keywords,
+        slots: response.queryUnderstanding.slots,
+        rewrittenQuery: response.queryUnderstanding.rewrittenQuery,
+        hyde: response.queryUnderstanding.hyde
+      }
     }
     
-    retrievalResults.value = [
-      {
-        id: '1',
-        content: '这是检索到的文档片段内容摘要...',
-        similarity: 0.92,
-        rankScore: 0.88,
-        fileName: '文档1.pdf',
-        metadata: { page: 1, section: '第一章' }
-      },
-      {
-        id: '2',
-        content: '这是另一个检索到的文档片段内容摘要...',
-        similarity: 0.85,
-        rankScore: 0.75,
-        fileName: '文档2.pdf',
-        metadata: { page: 3, section: '第二章' }
-      }
-    ]
+    if (response.retrievalResults && response.retrievalResults.length > 0) {
+      retrievalResults.value = response.retrievalResults
+    }
     
     isLoading.value = false
     scrollToBottom()
-  }, 1000)
+  } catch (error) {
+    console.error('Failed to send message:', error)
+    const errorMessage: Message = {
+      id: Date.now(),
+      type: 'assistant',
+      content: '抱歉，处理您的请求时出现了错误。请稍后重试。',
+      timestamp: new Date().toLocaleTimeString()
+    }
+    messages.value.push(errorMessage)
+    isLoading.value = false
+    scrollToBottom()
+  }
 }
 
 const handleKeyPress = (e: KeyboardEvent) => {
