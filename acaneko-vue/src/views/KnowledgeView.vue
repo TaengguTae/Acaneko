@@ -1,85 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { apiService, type KnowledgeBase, type Document, type VectorModel, type Language } from '../services/api'
 
-interface KnowledgeBase {
-  id: number
-  name: string
-  description: string
-  documentCount: number
-  createdAt: string
-  status: 'active' | 'inactive'
-  chunkSize: number
-  overlapSize: number
-  vectorModel: string
-  language: string
-}
-
-interface Document {
-  id: number
-  name: string
-  size: number
-  uploadTime: string
-  status: 'pending' | 'parsing' | 'completed' | 'failed'
-  chunks: number
-}
-
-const vectorModels = [
-  { value: 'openai-ada-002', label: 'OpenAI Ada-002' },
-  { value: 'openai-3-small', label: 'OpenAI Embedding-3 Small' },
-  { value: 'openai-3-large', label: 'OpenAI Embedding-3 Large' },
-  { value: 'bge-small', label: 'BGE-Small' },
-  { value: 'bge-large', label: 'BGE-Large' }
-]
-
-const languages = [
-  { value: 'zh-CN', label: '简体中文' },
-  { value: 'zh-TW', label: '繁体中文' },
-  { value: 'en', label: '英语' },
-  { value: 'ms', label: '马来语' },
-  { value: 'es', label: '西班牙语' }
-]
-
-const knowledgeBases = ref<KnowledgeBase[]>([
-  {
-    id: 1,
-    name: '技术文档库',
-    description: '包含公司所有技术文档和API文档',
-    documentCount: 156,
-    createdAt: '2024-01-15',
-    status: 'active',
-    chunkSize: 500,
-    overlapSize: 50,
-    vectorModel: 'openai-3-small',
-    language: 'zh-CN'
-  },
-  {
-    id: 2,
-    name: '产品手册库',
-    description: '产品使用手册和用户指南',
-    documentCount: 89,
-    createdAt: '2024-02-20',
-    status: 'active',
-    chunkSize: 400,
-    overlapSize: 40,
-    vectorModel: 'bge-small',
-    language: 'zh-CN'
-  },
-  {
-    id: 3,
-    name: '培训资料库',
-    description: '员工培训和学习资料',
-    documentCount: 234,
-    createdAt: '2024-03-10',
-    status: 'inactive',
-    chunkSize: 600,
-    overlapSize: 60,
-    vectorModel: 'openai-ada-002',
-    language: 'en'
-  }
-])
-
+const vectorModels = ref<VectorModel[]>([])
+const languages = ref<Language[]>([])
+const knowledgeBases = ref<KnowledgeBase[]>([])
 const showCreateModal = ref(false)
 const showDetailModal = ref(false)
+const showDeleteConfirmModal = ref(false)
+const showDeleteDocumentsConfirmModal = ref(false)
+const deleteTarget = ref<{ type: 'knowledgeBase' | 'documents', id?: string, ids?: string[], name?: string } | null>(null)
 const selectedKnowledgeBase = ref<KnowledgeBase | null>(null)
 const newKnowledgeBase = ref({
   name: '',
@@ -90,86 +20,121 @@ const newKnowledgeBase = ref({
   language: 'zh-CN'
 })
 
-const documents = ref<Document[]>([
-  {
-    id: 1,
-    name: 'API开发指南.pdf',
-    size: 2456789,
-    uploadTime: '2024-03-29 10:30:00',
-    status: 'completed',
-    chunks: 156
-  },
-  {
-    id: 2,
-    name: '系统架构设计.docx',
-    size: 1234567,
-    uploadTime: '2024-03-29 11:15:00',
-    status: 'completed',
-    chunks: 89
-  },
-  {
-    id: 3,
-    name: '用户手册.pdf',
-    size: 3456789,
-    uploadTime: '2024-03-29 14:20:00',
-    status: 'parsing',
-    chunks: 0
-  },
-  {
-    id: 4,
-    name: '常见问题解答.md',
-    size: 567890,
-    uploadTime: '2024-03-29 15:45:00',
-    status: 'pending',
-    chunks: 0
-  }
-])
-
-const selectedDocuments = ref<number[]>([])
+const documents = ref<Document[]>([])
+const selectedDocuments = ref<string[]>([])
 const isParsing = ref(false)
 const uploadProgress = ref(0)
 const isUploading = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-const handleCreate = () => {
-  const newId = Math.max(...knowledgeBases.value.map(kb => kb.id)) + 1
-  knowledgeBases.value.unshift({
-    id: newId,
-    name: newKnowledgeBase.value.name,
-    description: newKnowledgeBase.value.description,
-    documentCount: 0,
-    createdAt: new Date().toISOString().split('T')[0],
-    status: 'active',
-    chunkSize: newKnowledgeBase.value.chunkSize,
-    overlapSize: newKnowledgeBase.value.overlapSize,
-    vectorModel: newKnowledgeBase.value.vectorModel,
-    language: newKnowledgeBase.value.language
-  })
-  newKnowledgeBase.value = {
-    name: '',
-    description: '',
-    chunkSize: 500,
-    overlapSize: 50,
-    vectorModel: 'openai-3-small',
-    language: 'zh-CN'
+onMounted(async () => {
+  await loadConfigurations()
+  await loadKnowledgeBases()
+})
+
+const loadConfigurations = async () => {
+  try {
+    vectorModels.value = await apiService.getVectorModels()
+    languages.value = await apiService.getLanguages()
+  } catch (error) {
+    console.error('Failed to load configurations:', error)
   }
-  showCreateModal.value = false
 }
 
-const handleDelete = (id: number) => {
-  knowledgeBases.value = knowledgeBases.value.filter(kb => kb.id !== id)
+const loadKnowledgeBases = async () => {
+  try {
+    knowledgeBases.value = await apiService.getKnowledgeBases()
+  } catch (error) {
+    console.error('Failed to load knowledge bases:', error)
+  }
 }
 
-const toggleStatus = (id: number) => {
+const loadDocuments = async (kbId: string) => {
+  try {
+    documents.value = await apiService.getDocuments(kbId)
+  } catch (error) {
+    console.error('Failed to load documents:', error)
+  }
+}
+
+const handleCreate = async () => {
+  try {
+    const kb = await apiService.createKnowledgeBase({
+      name: newKnowledgeBase.value.name,
+      description: newKnowledgeBase.value.description,
+      chunkSize: newKnowledgeBase.value.chunkSize,
+      overlapSize: newKnowledgeBase.value.overlapSize,
+      vectorModel: newKnowledgeBase.value.vectorModel,
+      language: newKnowledgeBase.value.language
+    })
+    
+    knowledgeBases.value.unshift(kb)
+    
+    newKnowledgeBase.value = {
+      name: '',
+      description: '',
+      chunkSize: 500,
+      overlapSize: 50,
+      vectorModel: 'openai-3-small',
+      language: 'zh-CN'
+    }
+    showCreateModal.value = false
+  } catch (error) {
+    console.error('Failed to create knowledge base:', error)
+    alert('创建知识库失败，请重试')
+  }
+}
+
+const handleDelete = async (id: string) => {
   const kb = knowledgeBases.value.find(kb => kb.id === id)
   if (kb) {
-    kb.status = kb.status === 'active' ? 'inactive' : 'active'
+    deleteTarget.value = {
+      type: 'knowledgeBase',
+      id: id,
+      name: kb.name
+    }
+    showDeleteConfirmModal.value = true
   }
 }
 
-const openDetailModal = (kb: KnowledgeBase) => {
+const confirmDeleteKnowledgeBase = async () => {
+  if (!deleteTarget.value || deleteTarget.value.type !== 'knowledgeBase' || !deleteTarget.value.id) return
+  
+  try {
+    await apiService.deleteKnowledgeBase(deleteTarget.value.id)
+    knowledgeBases.value = knowledgeBases.value.filter(kb => kb.id !== deleteTarget.value!.id)
+    showDeleteConfirmModal.value = false
+    deleteTarget.value = null
+  } catch (error) {
+    console.error('Failed to delete knowledge base:', error)
+    alert('删除知识库失败，请重试')
+  }
+}
+
+const cancelDelete = () => {
+  showDeleteConfirmModal.value = false
+  showDeleteDocumentsConfirmModal.value = false
+  deleteTarget.value = null
+}
+
+const toggleStatus = async (id: string) => {
+  try {
+    const kb = knowledgeBases.value.find(kb => kb.id === id)
+    if (kb) {
+      const newStatus = kb.status === 'active' ? 'inactive' : 'active'
+      await apiService.updateKnowledgeBase(id, { status: newStatus })
+      kb.status = newStatus
+    }
+  } catch (error) {
+    console.error('Failed to toggle status:', error)
+    alert('更新状态失败，请重试')
+  }
+}
+
+const openDetailModal = async (kb: KnowledgeBase) => {
   selectedKnowledgeBase.value = kb
   showDetailModal.value = true
+  await loadDocuments(kb.id)
 }
 
 const formatFileSize = (bytes: number) => {
@@ -207,74 +172,122 @@ const handleUpload = () => {
   fileInputRef.value?.click()
 }
 
-const handleFileChange = (event: Event) => {
+const handleFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
   
   if (!files || files.length === 0) return
   
-  isUploading.value = true
-  uploadProgress.value = 0
+  if (!selectedKnowledgeBase.value) {
+    alert('请先选择知识库')
+    return
+  }
   
-  const interval = setInterval(() => {
-    uploadProgress.value += 10
-    if (uploadProgress.value >= 100) {
-      clearInterval(interval)
-      isUploading.value = false
-      uploadProgress.value = 0
-      
-      Array.from(files).forEach(file => {
-        const newDoc: Document = {
-          id: Date.now() + Math.random(),
-          name: file.name,
-          size: file.size,
-          uploadTime: new Date().toLocaleString(),
-          status: 'pending',
-          chunks: 0
-        }
-        documents.value.unshift(newDoc)
-      })
-      
-      if (selectedKnowledgeBase.value) {
-        selectedKnowledgeBase.value.documentCount += files.length
-      }
-      
-      if (target) {
-        target.value = ''
-      }
+  try {
+    isUploading.value = true
+    uploadProgress.value = 0
+    
+    const interval = setInterval(() => {
+      uploadProgress.value += 10
+    }, 100)
+
+    const result = await apiService.uploadDocuments(
+      selectedKnowledgeBase.value.id,
+      Array.from(files)
+    )
+    
+    clearInterval(interval)
+    isUploading.value = false
+    uploadProgress.value = 0
+    
+    documents.value = [...result.documents, ...documents.value]
+    
+    if (selectedKnowledgeBase.value) {
+      selectedKnowledgeBase.value.documentCount = documents.value.length
     }
-  }, 200)
+    
+    if (target) {
+      target.value = ''
+    }
+  } catch (error) {
+    console.error('Failed to upload documents:', error)
+    alert('上传文档失败，请重试')
+    isUploading.value = false
+    uploadProgress.value = 0
+  }
 }
 
 const handleBatchDelete = () => {
   if (selectedDocuments.value.length === 0) return
+  if (!selectedKnowledgeBase.value) {
+    alert('请先选择知识库')
+    return
+  }
   
-  documents.value = documents.value.filter(doc => !selectedDocuments.value.includes(doc.id))
-  selectedDocuments.value = []
+  deleteTarget.value = {
+    type: 'documents',
+    ids: selectedDocuments.value
+  }
+  showDeleteDocumentsConfirmModal.value = true
+}
+
+const confirmDeleteDocuments = async () => {
+  if (!deleteTarget.value || deleteTarget.value.type !== 'documents' || !deleteTarget.value.ids) return
+  if (!selectedKnowledgeBase.value) return
   
-  if (selectedKnowledgeBase.value) {
-    selectedKnowledgeBase.value.documentCount = documents.value.length
+  try {
+    await apiService.batchDeleteDocuments(
+      selectedKnowledgeBase.value.id,
+      deleteTarget.value.ids
+    )
+    
+    documents.value = documents.value.filter(doc => !deleteTarget.value!.ids!.includes(doc.id))
+    selectedDocuments.value = []
+    
+    if (selectedKnowledgeBase.value) {
+      selectedKnowledgeBase.value.documentCount = documents.value.length
+    }
+    
+    showDeleteDocumentsConfirmModal.value = false
+    deleteTarget.value = null
+  } catch (error) {
+    console.error('Failed to batch delete documents:', error)
+    alert('批量删除失败，请重试')
   }
 }
 
-const handleStartParsing = () => {
-  isParsing.value = true
+const handleStartParsing = async () => {
+  if (!selectedKnowledgeBase.value) {
+    alert('请先选择知识库')
+    return
+  }
   
-  documents.value.forEach(doc => {
-    if (doc.status === 'pending') {
-      doc.status = 'parsing'
-    }
-  })
-  
-  setTimeout(() => {
+  try {
+    isParsing.value = true
+    
+    await apiService.parseDocuments(
+      selectedKnowledgeBase.value.id,
+      selectedKnowledgeBase.value.chunkSize,
+      selectedKnowledgeBase.value.overlapSize,
+      selectedKnowledgeBase.value.vectorModel,
+      selectedKnowledgeBase.value.language
+    )
+    
     documents.value.forEach(doc => {
-      if (doc.status === 'parsing') {
-        doc.status = 'completed'
-        doc.chunks = Math.floor(Math.random() * 200) + 50
+      if (doc.status === 'pending') {
+        doc.status = 'parsing'
       }
     })
+    
+    setTimeout(async () => {
+      await loadDocuments(selectedKnowledgeBase.value.id)
+      isParsing.value = false
+    }, 3000)
+  } catch (error) {
+    console.error('Failed to start parsing:', error)
+    alert('开始解析失败，请重试')
     isParsing.value = false
-  }, 3000)
+  }
 }
 </script>
 
@@ -377,31 +390,31 @@ const handleStartParsing = () => {
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">向量模型</label>
-            <select v-model="newKnowledgeBase.vectorModel" class="form-select">
-              <option
-                v-for="model in vectorModels"
-                :key="model.value"
-                :value="model.value"
-              >
-                {{ model.label }}
-              </option>
-            </select>
+            <div class="form-group">
+              <label class="form-label">向量模型</label>
+              <select v-model="newKnowledgeBase.vectorModel" class="form-select">
+                <option
+                  v-for="model in vectorModels"
+                  :key="model.value"
+                  :value="model.value"
+                >
+                  {{ model.label }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">知识库语言</label>
+              <select v-model="newKnowledgeBase.language" class="form-select">
+                <option
+                  v-for="lang in languages"
+                  :key="lang.value"
+                  :value="lang.value"
+                >
+                  {{ lang.label }}
+                </option>
+              </select>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">知识库语言</label>
-            <select v-model="newKnowledgeBase.language" class="form-select">
-              <option
-                v-for="lang in languages"
-                :key="lang.value"
-                :value="lang.value"
-              >
-                {{ lang.label }}
-              </option>
-            </select>
-          </div>
-        </div>
         <div class="modal-actions">
           <button class="modal-btn cancel" @click="showCreateModal = false">
             取消
@@ -523,6 +536,48 @@ const handleStartParsing = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDeleteConfirmModal" class="modal-overlay confirm-overlay" @click="cancelDelete">
+      <div class="modal-content confirm-modal" @click.stop>
+        <div class="confirm-icon">⚠️</div>
+        <h2 class="modal-title">确认删除</h2>
+        <p class="confirm-message">
+          确定要删除知识库「{{ deleteTarget?.name }}」吗？
+        </p>
+        <p class="confirm-warning">
+          此操作将永久删除该知识库及其所有文档，无法恢复。
+        </p>
+        <div class="modal-actions">
+          <button class="modal-btn cancel" @click="cancelDelete">
+            取消
+          </button>
+          <button class="modal-btn danger" @click="confirmDeleteKnowledgeBase">
+            确认删除
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDeleteDocumentsConfirmModal" class="modal-overlay confirm-overlay" @click="cancelDelete">
+      <div class="modal-content confirm-modal" @click.stop>
+        <div class="confirm-icon">⚠️</div>
+        <h2 class="modal-title">确认删除</h2>
+        <p class="confirm-message">
+          确定要删除选中的 {{ deleteTarget?.ids?.length }} 个文档吗？
+        </p>
+        <p class="confirm-warning">
+          此操作将永久删除选中的文档，无法恢复。
+        </p>
+        <div class="modal-actions">
+          <button class="modal-btn cancel" @click="cancelDelete">
+            取消
+          </button>
+          <button class="modal-btn danger" @click="confirmDeleteDocuments">
+            确认删除
+          </button>
         </div>
       </div>
     </div>
@@ -1232,4 +1287,45 @@ const handleStartParsing = () => {
     align-items: flex-start;
   }
 }
+
+.confirm-modal {
+  max-width: 400px;
+  padding: 32px;
+  text-align: center;
+}
+
+.confirm-overlay {
+  z-index: 2000 !important;
+}
+
+.confirm-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.confirm-message {
+  font-size: 16px;
+  color: #333;
+  margin: 0 0 12px 0;
+  font-weight: 500;
+}
+
+.confirm-warning {
+  font-size: 14px;
+  color: #ff4757;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.modal-btn.danger {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+  color: #fff;
+  border: none;
+}
+
+.modal-btn.danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(238, 90, 111, 0.4);
+}
+
 </style>
