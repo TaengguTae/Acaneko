@@ -1,122 +1,185 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 interface Model {
   id: number
   name: string
   provider: string
   version: string
-  status: 'active' | 'inactive'
+  type: 'embedding' | 'rerank'
   description: string
 }
 
-interface TestResult {
+interface DocInput {
   id: number
-  modelName: string
-  testType: string
-  input: string
-  output: string
-  latency: number
-  timestamp: string
+  content: string
 }
 
-const models = ref<Model[]>([
+interface ModelResult {
+  modelId: number
+  modelName: string
+  docScores: Array<{
+    docId: number
+    docContent: string
+    score: number
+  }>
+}
+
+const activeTab = ref<'embedding' | 'rerank'>('embedding')
+
+const embeddingModels = ref<Model[]>([
   {
     id: 1,
-    name: 'GPT-4',
+    name: 'OpenAI Embedding-3',
     provider: 'OpenAI',
-    version: 'gpt-4-turbo',
-    status: 'active',
-    description: '最先进的语言模型，适用于复杂任务'
+    version: 'text-embedding-3-small',
+    type: 'embedding',
+    description: '最新的OpenAI嵌入模型，支持多语言'
   },
   {
     id: 2,
-    name: 'Claude-3',
-    provider: 'Anthropic',
-    version: 'claude-3-opus',
-    status: 'active',
-    description: '强大的多模态模型，擅长推理和分析'
+    name: 'BGE-Large',
+    provider: 'BAAI',
+    version: 'bge-large-zh-v1.5',
+    type: 'embedding',
+    description: '强大的中文嵌入模型，适合中文场景'
   },
   {
     id: 3,
-    name: 'Qwen',
-    provider: 'Alibaba',
-    version: 'qwen-turbo',
-    status: 'inactive',
-    description: '高性能中文语言模型'
-  }
-])
-
-const testResults = ref<TestResult[]>([
-  {
-    id: 1,
-    modelName: 'GPT-4',
-    testType: '问答测试',
-    input: '什么是机器学习？',
-    output: '机器学习是人工智能的一个分支...',
-    latency: 1.2,
-    timestamp: '2024-03-29 10:30:00'
+    name: 'Cohere Embed',
+    provider: 'Cohere',
+    version: 'embed-multilingual-v3.0',
+    type: 'embedding',
+    description: '多语言嵌入模型，支持100+语言'
   },
   {
-    id: 2,
-    modelName: 'Claude-3',
-    testType: '摘要生成',
-    input: '长文本内容...',
-    output: '摘要内容...',
-    latency: 0.8,
-    timestamp: '2024-03-29 10:25:00'
+    id: 4,
+    name: 'E5-Large',
+    provider: 'Intfloat',
+    version: 'e5-large-v2',
+    type: 'embedding',
+    description: '高性能嵌入模型，支持长文本'
   }
 ])
 
-const selectedModel = ref<number>(1)
-const testInput = ref('')
-const testType = ref('问答测试')
-const isTesting = ref(false)
-const showResults = ref(true)
+const rerankModels = ref<Model[]>([
+  {
+    id: 5,
+    name: 'BGE Reranker',
+    provider: 'BAAI',
+    version: 'bge-reranker-v2-m3',
+    type: 'rerank',
+    description: '高效的中文重排序模型'
+  },
+  {
+    id: 6,
+    name: 'Cohere Rerank',
+    provider: 'Cohere',
+    version: 'rerank-v3.5',
+    type: 'rerank',
+    description: '多语言重排序模型，性能优异'
+  },
+  {
+    id: 7,
+    name: 'Cross Encoder',
+    provider: 'Microsoft',
+    version: 'cross-encoder-ms-marco',
+    type: 'rerank',
+    description: '经典的重排序模型，稳定可靠'
+  }
+])
 
-const testTypes = [
-  '问答测试',
-  '摘要生成',
-  '文本分类',
-  '情感分析',
-  '代码生成'
-]
+const queryInput = ref('')
+const docInputs = ref<DocInput[]>([
+  { id: 1, content: '' }
+])
+const selectedModelIds = ref<number[]>([])
+const isRunning = ref(false)
+const testResults = ref<ModelResult[]>([])
+const docIdCounter = ref(2)
 
-const handleTest = async () => {
-  if (!testInput.value.trim() || isTesting.value) return
+const currentModels = computed(() => {
+  return activeTab.value === 'embedding' ? embeddingModels.value : rerankModels.value
+})
 
-  isTesting.value = true
+const canRunTest = computed(() => {
+  return queryInput.value.trim() !== '' &&
+         docInputs.value.some(doc => doc.content.trim() !== '') &&
+         selectedModelIds.value.length >= 1 &&
+         selectedModelIds.value.length <= 3
+})
 
-  setTimeout(() => {
-    const model = models.value.find(m => m.id === selectedModel.value)
-    const newResult: TestResult = {
-      id: Date.now(),
-      modelName: model?.name || 'Unknown',
-      testType: testType.value,
-      input: testInput.value,
-      output: `这是一个模拟的${testType.value}结果。在实际应用中，这里会调用模型API并返回真实结果。`,
-      latency: Math.random() * 2 + 0.5,
-      timestamp: new Date().toLocaleString()
-    }
-
-    testResults.value.unshift(newResult)
-    testInput.value = ''
-    isTesting.value = false
-    showResults.value = true
-  }, 1500)
-}
-
-const toggleModelStatus = (id: number) => {
-  const model = models.value.find(m => m.id === id)
-  if (model) {
-    model.status = model.status === 'active' ? 'inactive' : 'active'
+const addDocInput = () => {
+  if (docInputs.value.length < 10) {
+    docInputs.value.push({
+      id: docIdCounter.value++,
+      content: ''
+    })
   }
 }
 
-const getLatencyColor = (latency: number) => {
-  if (latency < 1) return '#4caf50'
-  if (latency < 2) return '#ff9800'
+const removeDocInput = (id: number) => {
+  if (docInputs.value.length > 1) {
+    docInputs.value = docInputs.value.filter(doc => doc.id !== id)
+  }
+}
+
+const toggleModelSelection = (modelId: number) => {
+  const index = selectedModelIds.value.indexOf(modelId)
+  if (index > -1) {
+    selectedModelIds.value.splice(index, 1)
+  } else if (selectedModelIds.value.length < 3) {
+    selectedModelIds.value.push(modelId)
+  }
+}
+
+const runTest = async () => {
+  if (!canRunTest.value || isRunning.value) return
+
+  isRunning.value = true
+  testResults.value = []
+
+  await new Promise(resolve => setTimeout(resolve, 2000))
+
+  selectedModelIds.value.forEach(modelId => {
+    const model = currentModels.value.find(m => m.id === modelId)
+    if (model) {
+      const docScores = docInputs.value
+        .filter(doc => doc.content.trim() !== '')
+        .map(doc => ({
+          docId: doc.id,
+          docContent: doc.content,
+          score: Math.random() * 0.5 + 0.5
+        }))
+        .sort((a, b) => b.score - a.score)
+
+      testResults.value.push({
+        modelId: modelId,
+        modelName: model.name,
+        docScores
+      })
+    }
+  })
+
+  isRunning.value = false
+}
+
+const getScoreColor = (score: number) => {
+  if (score >= 0.8) return '#4caf50'
+  if (score >= 0.6) return '#2196f3'
+  if (score >= 0.4) return '#ff9800'
   return '#f44336'
+}
+
+const getScoreLabel = (score: number) => {
+  if (score >= 0.8) return '优秀'
+  if (score >= 0.6) return '良好'
+  if (score >= 0.4) return '一般'
+  return '较差'
+}
+
+const clearResults = () => {
+  testResults.value = []
 }
 </script>
 
@@ -129,126 +192,168 @@ const getLatencyColor = (latency: number) => {
       </div>
     </div>
 
-    <div class="model-grid">
-      <div class="models-section">
+    <div class="tab-navigation">
+      <div
+        class="tab-item"
+        :class="{ active: activeTab === 'embedding' }"
+        @click="activeTab = 'embedding'"
+      >
+        <span class="tab-icon">📊</span>
+        <span class="tab-label">Embedding模型</span>
+      </div>
+      <div
+        class="tab-item"
+        :class="{ active: activeTab === 'rerank' }"
+        @click="activeTab = 'rerank'"
+      >
+        <span class="tab-icon">🔄</span>
+        <span class="tab-label">Rerank模型</span>
+      </div>
+    </div>
+
+    <div class="content-grid">
+      <div class="input-section">
         <div class="section-header">
-          <h2 class="section-title">可用模型</h2>
-          <span class="section-count">{{ models.length }} 个模型</span>
+          <h2 class="section-title">输入配置</h2>
         </div>
 
-        <div class="model-list">
-          <div
-            v-for="model in models"
-            :key="model.id"
-            class="model-card"
-            :class="{ active: selectedModel === model.id, inactive: model.status === 'inactive' }"
-            @click="selectedModel = model.id"
-          >
-            <div class="model-header">
-              <div class="model-info">
-                <h3 class="model-name">{{ model.name }}</h3>
-                <span class="model-provider">{{ model.provider }}</span>
+        <div class="input-form">
+          <div class="form-group">
+            <label class="form-label">
+              <span class="label-text">Query</span>
+              <span class="label-required">*</span>
+            </label>
+            <input
+              v-model="queryInput"
+              class="form-input"
+              placeholder="请输入查询内容..."
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <span class="label-text">文档</span>
+              <span class="label-required">*</span>
+            </label>
+            <div class="doc-inputs-container">
+              <div
+                v-for="doc in docInputs"
+                :key="doc.id"
+                class="doc-input-wrapper"
+              >
+                <input
+                  v-model="doc.content"
+                  class="form-input doc-input"
+                  placeholder="输入doc内容"
+                />
+                <button
+                  v-if="docInputs.length > 1"
+                  class="remove-doc-btn"
+                  @click="removeDocInput(doc.id)"
+                  title="删除此文档"
+                >
+                  ✕
+                </button>
               </div>
-              <div class="model-status" :class="model.status">
-                {{ model.status === 'active' ? '启用' : '禁用' }}
-              </div>
-            </div>
-            <p class="model-description">{{ model.description }}</p>
-            <div class="model-footer">
-              <span class="model-version">版本: {{ model.version }}</span>
-              <button class="toggle-btn" @click.stop="toggleModelStatus(model.id)">
-                {{ model.status === 'active' ? '禁用' : '启用' }}
+
+              <button
+                v-if="docInputs.length < 10"
+                class="add-doc-btn"
+                @click="addDocInput"
+                title="添加新文档"
+              >
+                <span class="add-icon">+</span>
+                <span class="add-text">添加文档</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="test-section">
+      <div class="model-section">
         <div class="section-header">
-          <h2 class="section-title">模型测试</h2>
+          <h2 class="section-title">模型选择</h2>
+          <span class="selection-info">
+            已选 {{ selectedModelIds.length }}/3
+          </span>
         </div>
 
-        <div class="test-form">
-          <div class="form-group">
-            <label class="form-label">选择模型</label>
-            <select v-model="selectedModel" class="form-select">
-              <option
-                v-for="model in models.filter(m => m.status === 'active')"
-                :key="model.id"
-                :value="model.id"
-              >
-                {{ model.name }} - {{ model.version }}
-              </option>
-            </select>
+        <div class="model-grid">
+          <div
+            v-for="model in currentModels"
+            :key="model.id"
+            class="model-card"
+            :class="{ selected: selectedModelIds.includes(model.id) }"
+            @click="toggleModelSelection(model.id)"
+          >
+            <div class="model-checkbox">
+              <div class="checkbox-indicator">
+                <span v-if="selectedModelIds.includes(model.id)">✓</span>
+              </div>
+            </div>
+            <div class="model-info">
+              <h3 class="model-name">{{ model.name }}</h3>
+            </div>
           </div>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label">测试类型</label>
-            <select v-model="testType" class="form-select">
-              <option v-for="type in testTypes" :key="type" :value="type">
-                {{ type }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">测试输入</label>
-            <textarea
-              v-model="testInput"
-              class="form-textarea"
-              placeholder="请输入测试内容..."
-              rows="4"
-            ></textarea>
-          </div>
+        <div class="action-buttons">
+          <button
+            class="run-btn"
+            :class="{ disabled: !canRunTest || isRunning }"
+            @click="runTest"
+          >
+            <span class="btn-icon">{{ isRunning ? '⏳' : '🚀' }}</span>
+            <span class="btn-text">{{ isRunning ? '测试中...' : '运行测试' }}</span>
+          </button>
 
           <button
-            class="test-btn"
-            :class="{ disabled: !testInput.trim() || isTesting }"
-            @click="handleTest"
+            v-if="testResults.length > 0"
+            class="clear-btn"
+            @click="clearResults"
           >
-            <span class="btn-icon">{{ isTesting ? '⏳' : '🚀' }}</span>
-            <span class="btn-text">{{ isTesting ? '测试中...' : '开始测试' }}</span>
+            <span class="btn-icon">🗑️</span>
+            <span class="btn-text">清除结果</span>
           </button>
         </div>
       </div>
     </div>
 
-    <div class="results-section">
+    <div v-if="testResults.length > 0" class="results-section">
       <div class="section-header">
         <h2 class="section-title">测试结果</h2>
-        <button class="toggle-results-btn" @click="showResults = !showResults">
-          {{ showResults ? '收起' : '展开' }}
-        </button>
+        <span class="result-count">{{ testResults.length }} 个模型</span>
       </div>
 
-      <div v-if="showResults" class="results-list">
+      <div class="results-grid">
         <div
           v-for="result in testResults"
-          :key="result.id"
+          :key="result.modelId"
           class="result-card"
         >
           <div class="result-header">
-            <div class="result-info">
-              <span class="result-model">{{ result.modelName }}</span>
-              <span class="result-type">{{ result.testType }}</span>
-            </div>
-            <div class="result-metrics">
-              <span class="result-latency" :style="{ color: getLatencyColor(result.latency) }">
-                ⏱️ {{ result.latency.toFixed(2) }}s
-              </span>
-              <span class="result-time">{{ result.timestamp }}</span>
-            </div>
+            <h3 class="result-model-name">{{ result.modelName }}</h3>
+            <span class="result-type">{{ activeTab === 'embedding' ? 'Embedding' : 'Rerank' }}</span>
           </div>
 
           <div class="result-body">
-            <div class="result-section">
-              <div class="result-label">输入</div>
-              <div class="result-content">{{ result.input }}</div>
+            <div
+              v-for="(docScore, index) in result.docScores"
+              :key="docScore.docId"
+              class="doc-bubble"
+            >
+              <div class="bubble-content">
+                <span class="doc-index">{{ index + 1 }}.</span>
+                <span class="doc-text">{{ docScore.docContent }}</span>
+                <div class="bubble-score" :style="{ backgroundColor: getScoreColor(docScore.score) }">
+                  <span class="score-value">{{ (docScore.score * 100).toFixed(1) }}%</span>
+                </div>
+              </div>
             </div>
-            <div class="result-section">
-              <div class="result-label">输出</div>
-              <div class="result-content">{{ result.output }}</div>
+
+            <div v-if="result.docScores.length === 0" class="empty-result">
+              <span class="empty-icon">📭</span>
+              <p class="empty-text">暂无测试结果</p>
             </div>
           </div>
         </div>
@@ -284,51 +389,206 @@ const getLatencyColor = (latency: number) => {
   margin: 0;
 }
 
-.model-grid {
+.tab-navigation {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 8px;
+  background: transparent;
+  border-radius: 12px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  color: #666;
+  background: #f8f9fa;
+}
+
+.tab-item:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+}
+
+.tab-item.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.tab-icon {
+  font-size: 20px;
+}
+
+.tab-label {
+  font-size: 15px;
+}
+
+.content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 32px;
 }
 
-.models-section,
-.test-section {
+.input-section {
   background: #fff;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.section-header {
+.input-section .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.section-title {
-  font-size: 20px;
+.input-section .section-title {
+  font-size: 18px;
   font-weight: 700;
   margin: 0;
   color: #333;
 }
 
-.section-count {
-  font-size: 14px;
-  color: #999;
-  font-weight: 500;
-}
-
-.model-list {
+.input-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.label-text {
+  font-size: 13px;
+}
+
+.label-required {
+  color: #f44336;
+  font-size: 15px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.doc-input {
+  padding-right: 40px;
+}
+
+.doc-inputs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doc-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.remove-doc-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #ffebee;
+  color: #f44336;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-doc-btn:hover {
+  background: #f44336;
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.add-doc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px dashed #667eea;
+  background: #f8f9ff;
+  color: #667eea;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.add-doc-btn:hover {
+  background: #667eea;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.add-icon {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.add-text {
+  font-size: 14px;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .model-card {
-  padding: 20px;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
   border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -339,189 +599,150 @@ const getLatencyColor = (latency: number) => {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
 }
 
-.model-card.active {
+.model-card.selected {
   border-color: #667eea;
   background: #f8f9ff;
 }
 
-.model-card.inactive {
-  opacity: 0.6;
+.model-checkbox {
+  flex-shrink: 0;
 }
 
-.model-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.model-info h3 {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0 0 4px 0;
-  color: #333;
-}
-
-.model-provider {
-  font-size: 13px;
-  color: #999;
-  font-weight: 500;
-}
-
-.model-status {
-  padding: 6px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.model-status.active {
-  background: #e8f5e9;
-  color: #4caf50;
-}
-
-.model-status.inactive {
-  background: #ffebee;
-  color: #f44336;
-}
-
-.model-description {
-  font-size: 14px;
-  color: #666;
-  margin: 0 0 16px 0;
-  line-height: 1.6;
-}
-
-.model-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.model-version {
-  font-size: 12px;
-  color: #999;
-  font-weight: 500;
-}
-
-.toggle-btn {
-  padding: 8px 16px;
+.checkbox-indicator {
+  width: 20px;
+  height: 20px;
   border: 2px solid #e0e0e0;
-  background: #fff;
-  color: #666;
-  border-radius: 8px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.toggle-btn:hover {
-  border-color: #667eea;
   color: #667eea;
-  background: #f8f9ff;
+  font-weight: 700;
+  transition: all 0.3s ease;
 }
 
-.test-form {
+.model-card.selected .checkbox-indicator {
+  background: #667eea;
+  border-color: #667eea;
+  color: #fff;
+}
+
+.model-info {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  align-items: center;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-label {
-  font-size: 14px;
-  font-weight: 600;
+.model-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
   color: #333;
 }
 
-.form-select,
-.form-textarea {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  font-family: inherit;
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 2px solid #f0f0f0;
 }
 
-.form-select:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.form-textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.test-btn {
+.run-btn,
+.clear-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
   border: none;
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  flex: 1;
+}
+
+.run-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.test-btn:hover:not(.disabled) {
+.run-btn:hover:not(.disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
-.test-btn.disabled {
+.run-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+.clear-btn {
+  background: #fff;
+  color: #666;
+  border: 2px solid #e0e0e0;
+}
+
+.clear-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: #f8f9ff;
 }
 
 .btn-icon {
   font-size: 18px;
 }
 
-.results-section {
+.btn-text {
+  font-size: 15px;
+}
+
+.model-section {
   background: #fff;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.toggle-results-btn {
-  padding: 8px 16px;
-  border: 2px solid #e0e0e0;
-  background: #fff;
-  color: #666;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.toggle-results-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
-  background: #f8f9ff;
-}
-
-.results-list {
+.model-section .section-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.model-section .section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: #333;
+}
+
+.model-section .selection-info {
+  font-size: 13px;
+  color: #667eea;
+  font-weight: 600;
+  background: #f8f9ff;
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+
+.result-count {
+  font-size: 14px;
+  color: #667eea;
+  font-weight: 600;
+  background: #f8f9ff;
+  padding: 6px 12px;
+  border-radius: 12px;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
 }
 
@@ -532,8 +753,19 @@ const getLatencyColor = (latency: number) => {
   transition: all 0.3s ease;
 }
 
-.result-card:hover {
+.result-card:nth-child(1) {
   border-color: #667eea;
+}
+
+.result-card:nth-child(2) {
+  border-color: #26a69a;
+}
+
+.result-card:nth-child(3) {
+  border-color: #ffa726;
+}
+
+.result-card:hover {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
 }
 
@@ -546,15 +778,10 @@ const getLatencyColor = (latency: number) => {
   border-bottom: 2px solid #e0e0e0;
 }
 
-.result-info {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.result-model {
-  font-size: 15px;
+.result-model-name {
+  font-size: 16px;
   font-weight: 700;
+  margin: 0;
   color: #333;
 }
 
@@ -567,54 +794,96 @@ const getLatencyColor = (latency: number) => {
   font-weight: 600;
 }
 
-.result-metrics {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-.result-latency {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.result-time {
-  font-size: 13px;
-  color: #999;
-}
-
 .result-body {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.result-section {
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.result-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.doc-bubble {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
-.result-content {
-  font-size: 14px;
+.doc-bubble:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.bubble-content {
+  padding: 8px 12px;
+  font-size: 13px;
   color: #333;
-  line-height: 1.6;
-  background: #f8f9ff;
-  padding: 12px;
-  border-radius: 8px;
+  line-height: 1.4;
+  background: #fff;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.doc-index {
+  font-size: 12px;
+  font-weight: 700;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.doc-text {
+  flex: 1;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bubble-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 5px;
+  min-width: 60px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.score-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.empty-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.empty-text {
+  font-size: 14px;
+  margin: 0;
 }
 
 @media (max-width: 1024px) {
-  .model-grid {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .results-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -624,21 +893,27 @@ const getLatencyColor = (latency: number) => {
     font-size: 24px;
   }
 
-  .model-header {
+  .tab-navigation {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  }
+
+  .tab-item {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .model-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-buttons {
+    flex-direction: column;
   }
 
   .result-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
-  }
-
-  .result-metrics {
-    width: 100%;
-    justify-content: space-between;
+    gap: 8px;
   }
 }
 </style>
